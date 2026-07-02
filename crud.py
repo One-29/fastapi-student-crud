@@ -1,6 +1,6 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 
 
 from models import Student
