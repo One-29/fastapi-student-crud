@@ -10,8 +10,12 @@ from schemas import StudentCreate, StudentUpdate
 #获取学生列表
 def get_students(
         db: Session
-):
-    return db.query(Student).all()
+) -> List[Student]:
+
+    stmt = select(Student)
+    students = db.scalars(stmt).all()
+
+    return list(students)
 
 
 # 查询学生信息
