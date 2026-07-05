@@ -1,8 +1,7 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-
+from sqlalchemy.ext.asyncio import AsyncSession
 import crud
 from database import get_db
 from schemas import StudentCreate, StudentUpdate, StudentResponse
@@ -15,18 +14,18 @@ router = APIRouter(
 
 
 @router.get("/", response_model=List[StudentResponse])
-def get_students(
-        db: Session = Depends(get_db)
+async def get_students(
+        db: AsyncSession = Depends(get_db)
 ):
-    return crud.get_students(db)
+    return await crud.get_students(db)
 
 
 @router.get("/{student_id}", response_model=StudentResponse)
-def get_student(
+async def get_student(
         student_id: int,
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_db)
 ):
-    student = crud.get_student(db, student_id)
+    student = await crud.get_student(db, student_id)
 
     if student is None:
         raise HTTPException(status_code=404, detail="Student not found")
@@ -34,20 +33,20 @@ def get_student(
 
 
 @router.post("/", response_model=StudentResponse, status_code=201)
-def create_student(
+async def create_student(
         student: StudentCreate,
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_db)
 ):
-    return crud.create_student(db, student)
+    return await crud.create_student(db, student)
 
 
 @router.patch("/{student_id}", response_model=StudentResponse)
-def update_student(
+async def update_student(
         student_id: int,
         student_data: StudentUpdate,
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_db)
 ):
-    student = crud.update_student(db, student_id, student_data)
+    student = await crud.update_student(db, student_id, student_data)
 
     if student is None:
         raise HTTPException(status_code=404, detail="Student not found")
@@ -56,11 +55,11 @@ def update_student(
 
 
 @router.delete("/{student_id}", response_model=StudentResponse)
-def delete_student(
+async def delete_student(
         student_id: int,
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_db)
 ):
-    student = crud.delete_student(db, student_id)
+    student = await crud.delete_student(db, student_id)
 
     if student is None:
         raise HTTPException(status_code=404, detail="Student not found")
