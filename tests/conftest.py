@@ -1,6 +1,9 @@
 import os
 import sys
 import pytest
+import httpx
+from main import app
+from database import get_db
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -12,6 +15,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
+
 
 @pytest.fixture(scope="session")
 async def engine():
@@ -40,3 +44,15 @@ async def db_session(engine):
     test_session = async_sessionmaker(engine, class_=AsyncSession)
     async with test_session() as session:
         yield session
+
+
+@pytest.fixture
+async def client(db_session):
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+    app.dependency_overrides.clear()
