@@ -21,7 +21,12 @@ load_dotenv(BASE_DIR / ".env")
 async def engine():
     url = os.getenv("TEST_DATABASE_URL")
     assert url is not None, "TEST_DATABASE_URL is not set"
-    engine = create_async_engine(url)
+
+    # 异步多线程环境， 不需要检查线程一致性
+    connect_args = {}
+    if "sqlite" in url:
+        connect_args["check_same_thread"] = False
+    engine = create_async_engine(url, connect_args=connect_args)
 
     async with engine.begin() as conn:
         await conn.run_sync(lambda c: Base.metadata.create_all(c))
@@ -36,14 +41,21 @@ async def engine():
 
 @pytest.fixture
 async def db_session(engine):
-    # 每个测试开始前清空所有表，保证测试之间数据隔离
-    async with engine.begin() as conn:
-        for table in reversed(Base.metadata.sorted_tables):
-            await conn.execute(table.delete())
 
-    test_session = async_sessionmaker(engine, class_=AsyncSession)
+    connection = await engine.connect()
+    trans = await connection.begin()
+
+    test_session = async_sessionmaker(
+        bind=connection,  # ← 关键：绑到手动开的连接
+        class_=AsyncSession,
+        expire_on_commit=False
+    )
+
     async with test_session() as session:
         yield session
+
+    await trans.rollback()
+    await trans.connection.close()
 
 
 @pytest.fixture
