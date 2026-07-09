@@ -1,17 +1,16 @@
 import os
 import sys
-import pytest
-import httpx
-from main import app
-from database import get_db
 from pathlib import Path
+
+import httpx
+import pytest
+from dotenv import load_dotenv
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from dotenv import load_dotenv
-from database import Base
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-
+from database import Base, get_db
+from main import app
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
@@ -22,40 +21,37 @@ async def engine():
     url = os.getenv("TEST_DATABASE_URL")
     assert url is not None, "TEST_DATABASE_URL is not set"
 
-    # 异步多线程环境， 不需要检查线程一致性
     connect_args = {}
     if "sqlite" in url:
         connect_args["check_same_thread"] = False
-    engine = create_async_engine(url, connect_args=connect_args)
 
-    async with engine.begin() as conn:
-        await conn.run_sync(lambda c: Base.metadata.create_all(c))
+    test_engine = create_async_engine(url, connect_args=connect_args)
 
-    yield engine
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
-    async with engine.begin() as conn:
-        await conn.run_sync(lambda c: Base.metadata.drop_all(c))
+    yield test_engine
 
-    await engine.dispose()
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+    await test_engine.dispose()
 
 
 @pytest.fixture
 async def db_session(engine):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
 
-    connection = await engine.connect()
-    trans = await connection.begin()
-
-    test_session = async_sessionmaker(
-        bind=connection,  # ← 关键：绑到手动开的连接
+    session_factory = async_sessionmaker(
+        bind=engine,
         class_=AsyncSession,
-        expire_on_commit=False
+        expire_on_commit=False,
     )
 
-    async with test_session() as session:
+    async with session_factory() as session:
         yield session
-
-    await trans.rollback()
-    await trans.connection.close()
 
 
 @pytest.fixture

@@ -6,7 +6,7 @@ import asyncio
 import websockets
 
 
-async def test_concurrent():
+async def run_concurrent_demo():
     uri = "ws://localhost:8000/ws"
     print(f"连接到 {uri}...")
 
@@ -37,7 +37,7 @@ async def test_concurrent():
 
 if __name__ == "__main__":
     try:
-        asyncio.run(test_concurrent())
+        asyncio.run(run_concurrent_demo())
         print("\n✓ 测试完成，无异常")
     except Exception as e:
         print(f"\n✗ 测试失败: {e}")

@@ -1,100 +1,82 @@
+async def _create_token_for_user(client, username: str = "alice") -> str:
+    await client.post(
+        "/auth/register",
+        json={"username": username, "password": "password123"},
+    )
+    login_response = await client.post(
+        "/auth/login",
+        json={"username": username, "password": "password123"},
+    )
+    return login_response.json()["access_token"]
 
 
-# 先测试post部分，如果报错，利于阅读和清理
-async def test_post_students(client):
+async def test_create_user(client):
     response = await client.post(
-        "/students/",
-        json={"name":"isOne", "age":19}
+        "/users/",
+        json={"username": "alice", "password": "password123"},
     )
+
     assert response.status_code == 201
-
-    data = response.json()
-    assert data["name"] == "isOne"
-    assert data["age"] == 19
-    assert "id" in data
+    assert response.json()["username"] == "alice"
+    assert "hashed_password" not in response.json()
 
 
-async def test_get_student(client):
-    post_stu = await  client.post(
-        "/students/",
-        json={"name": "红烧鱼", "age": 29}
+async def test_list_users_requires_auth(client):
+    response = await client.get("/users/")
+
+    assert response.status_code == 401
+
+
+async def test_list_users(client):
+    token = await _create_token_for_user(client)
+
+    response = await client.get(
+        "/users/",
+        headers={"Authorization": f"Bearer {token}"},
     )
-    student_id = post_stu.json()["id"]
 
-    response = await client.get(f"/students/{student_id}")
     assert response.status_code == 200
-
-    data = response.json()
-    assert data["name"] == "红烧鱼"
-    assert data["age"] == 29
+    assert [user["username"] for user in response.json()] == ["alice"]
 
 
-async def test_get_student_not_found(client):
-    response = await client.get("/students/999")
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Student not found"
+async def test_get_user(client):
+    token = await _create_token_for_user(client)
 
-
-async def test_get_students_empty(client):
-    response = await client.get("/students/")
-    assert response.status_code == 200
-    assert response.json() == []
-
-
-async def test_get_students_with_data(client):
-    await client.post("/students/", json={"name": "测试", "age": 20})
-    response = await client.get("/students/")
-    assert response.status_code == 200
-    assert len(response.json()) == 1
-
-
-async def test_update_student(client):
-    post_stu = await client.post(
-        "/students/",
-        json={"name": "更新前", "age": 22}
+    response = await client.get(
+        "/users/1",
+        headers={"Authorization": f"Bearer {token}"},
     )
-    student_id = post_stu.json()["id"]
+
+    assert response.status_code == 200
+    assert response.json()["username"] == "alice"
+
+
+async def test_update_user(client):
+    token = await _create_token_for_user(client)
 
     response = await client.patch(
-        f"/students/{student_id}",
-        json={"name": "更新后"}
+        "/users/1",
+        json={"username": "renamed"},
+        headers={"Authorization": f"Bearer {token}"},
     )
+
     assert response.status_code == 200
-
-    data = response.json()
-    assert data["name"] == "更新后"
-    assert data["age"] == 22
+    assert response.json()["username"] == "renamed"
 
 
-async def test_update_student_not_found(client):
-    response = await client.patch(
-        "/students/999",
-        json={"name": "不存在"}
-    )
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Student not found"
+async def test_delete_user(client):
+    token = await _create_token_for_user(client)
 
-
-async def test_delete_student(client):
-    post_stu = await client.post(
-        "/students/",
-        json={"name": "待删除", "age": 18}
-    )
-    student_id = post_stu.json()["id"]
-
-    response = await client.delete(f"/students/{student_id}")
-    assert response.status_code == 200
-
-    response = await client.get(f"/students/{student_id}")
-    assert response.status_code == 404
-
-
-async def test_delete_student_not_found(client):
     response = await client.delete(
-        "/students/999"
+        "/users/1",
+        headers={"Authorization": f"Bearer {token}"},
     )
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Student not found"
 
+    assert response.status_code == 200
+    assert response.json()["username"] == "alice"
 
-
+    response = await client.get(
+        "/users/1",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 401

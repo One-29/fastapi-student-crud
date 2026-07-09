@@ -2,26 +2,43 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
-if SQLALCHEMY_DATABASE_URL is None:
-    raise RuntimeError("DATABASE_URL is not set")
+def _require_database_url() -> str:
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL is not set")
+    return url
 
-engine = create_async_engine(
-    SQLALCHEMY_DATABASE_URL,
-    echo=True
-)
 
+def make_async_database_url(url: str) -> str:
+    """Normalize common sync SQLAlchemy URLs to async drivers."""
+    replacements = {
+        "mysql+pymysql://": "mysql+aiomysql://",
+        "mysql://": "mysql+aiomysql://",
+        "postgresql+psycopg2://": "postgresql+asyncpg://",
+        "postgresql://": "postgresql+asyncpg://",
+        "sqlite:///": "sqlite+aiosqlite:///",
+    }
+    for source, target in replacements.items():
+        if url.startswith(source):
+            return url.replace(source, target, 1)
+    return url
+
+
+SQLALCHEMY_DATABASE_URL = _require_database_url()
+ASYNC_DATABASE_URL = make_async_database_url(SQLALCHEMY_DATABASE_URL)
+
+engine = create_async_engine(ASYNC_DATABASE_URL, echo=False)
 async_session = async_sessionmaker(
     engine,
     class_=AsyncSession,
-    expire_on_commit=False
+    expire_on_commit=False,
 )
 
 

@@ -1,72 +1,68 @@
 import pytest
-from crud import get_students, create_student, get_student, update_student, delete_student
-from schemas import StudentCreate, StudentUpdate
+
+from crud import create_user, delete_user, get_user_by_id, get_user_by_username, get_users, update_user
 
 
 @pytest.mark.asyncio
-async def test_create_student(db_session):
-    data = StudentCreate(name="张三", age=20)
-    student = await create_student(db_session, data)
+async def test_create_user(db_session):
+    user = await create_user(db_session, "alice", "hashed-password")
 
-    assert student.id is not None
-    assert student.name == "张三"
-    assert student.age == 20
+    assert user.id is not None
+    assert user.username == "alice"
+    assert user.hashed_password == "hashed-password"
 
 
 @pytest.mark.asyncio
-async def test_get_student(db_session):
-    data = StudentCreate(name="李四", age=22)
-    created = await create_student(db_session, data)
+async def test_get_user_by_id(db_session):
+    created = await create_user(db_session, "bob", "hashed-password")
 
-    fetched = await get_student(db_session, created.id)
+    fetched = await get_user_by_id(db_session, created.id)
+
     assert fetched is not None
-    assert fetched.name == "李四"
+    assert fetched.username == "bob"
 
 
 @pytest.mark.asyncio
-async def test_get_students(db_session):
-    await create_student(db_session, StudentCreate(name="王五", age=24))
-    await create_student(db_session, StudentCreate(name="赵六", age=26))
+async def test_get_user_by_username(db_session):
+    await create_user(db_session, "carol", "hashed-password")
 
-    students = await get_students(db_session)
+    fetched = await get_user_by_username(db_session, "carol")
 
-    assert len(students) == 2
-    assert students[0].name == "王五"
-    assert students[0].age == 24
-    assert students[1].name == "赵六"
-    assert students[1].age == 26
+    assert fetched is not None
+    assert fetched.username == "carol"
 
 
 @pytest.mark.asyncio
-async def test_update_student(db_session):
-    created = await create_student(db_session, StudentCreate(name="旧名", age=20))
+async def test_get_users(db_session):
+    await create_user(db_session, "dave", "hashed-password")
+    await create_user(db_session, "erin", "hashed-password")
 
-    update_data = StudentUpdate(name="新名")
-    updated = await update_student(db_session, created.id, update_data)
+    users = await get_users(db_session)
 
-    assert updated is not None
-    assert updated.name == "新名"
-    assert updated.age == 20  # age 没传，保持不变
+    assert [user.username for user in users] == ["dave", "erin"]
 
 
 @pytest.mark.asyncio
-async def test_update_student_partial(db_session):
-    created = await create_student(db_session, StudentCreate(name="部分更新", age=25))
+async def test_update_user(db_session):
+    created = await create_user(db_session, "oldname", "old-hash")
 
-    update_data = StudentUpdate(age=30)
-    updated = await update_student(db_session, created.id, update_data)
+    updated = await update_user(
+        db_session,
+        created,
+        username="newname",
+        hashed_password="new-hash",
+    )
 
-    assert updated is not None
-    assert updated.name == "部分更新"
-    assert updated.age == 30
+    assert updated.username == "newname"
+    assert updated.hashed_password == "new-hash"
 
 
 @pytest.mark.asyncio
-async def test_delete_student(db_session):
-    created = await create_student(db_session, StudentCreate(name="待删", age=20))
+async def test_delete_user(db_session):
+    created = await create_user(db_session, "delete-me", "hashed-password")
 
-    deleted = await delete_student(db_session, created.id)
-    assert deleted is not None
+    deleted = await delete_user(db_session, created)
+    fetched = await get_user_by_id(db_session, deleted.id)
 
-    fetched = await get_student(db_session, created.id)
+    assert deleted.username == "delete-me"
     assert fetched is None
